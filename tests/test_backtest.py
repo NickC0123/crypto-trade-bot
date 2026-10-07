@@ -61,3 +61,10 @@ def test_train_test_runs(df):
     train, test = backtest.train_test(df, fn, grid)
     assert train.params == test.params
     assert test.equity.index[0] > train.equity.index[-1]
+
+
+def test_drop_unfinished_keeps_only_closed_candles():
+    day = 86_400_000
+    raw = pd.DataFrame({"timestamp": [0, day, 2 * day], "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0})
+    assert list(data.drop_unfinished(raw, day, now_ms=2 * day + 5)["timestamp"]) == [0, day]
+    assert len(data.drop_unfinished(raw, day, now_ms=3 * day)) == 3
