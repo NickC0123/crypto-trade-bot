@@ -68,3 +68,10 @@ def test_drop_unfinished_keeps_only_closed_candles():
     raw = pd.DataFrame({"timestamp": [0, day, 2 * day], "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0})
     assert list(data.drop_unfinished(raw, day, now_ms=2 * day + 5)["timestamp"]) == [0, day]
     assert len(data.drop_unfinished(raw, day, now_ms=3 * day)) == 3
+
+
+def test_walk_forward_windows_are_out_of_sample(df):
+    wf = backtest.walk_forward(df, *strategies.STRATEGIES["sma_cross"], train=300, test=100)
+    assert len(wf) == 3
+    assert (wf["start"].diff().dropna() == pd.Timedelta(days=100)).all()
+    assert wf["start"].iloc[0] == df.index[300]

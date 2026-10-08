@@ -16,10 +16,14 @@ python -m pytest
 python -m bot download --symbol BTC/USD --timeframe 1d --since 2019-01-01   # public candles, no key
 python -m bot backtest --data data/coinbase_BTC-USD_1d.csv
 python -m bot backtest --synthetic                                         # offline demo on fake data
+python -m bot walkforward --data data/coinbase_BTC-USD_1d.csv              # many rolling out-of-sample windows
 ```
 
 `backtest` tunes each strategy's parameters on the first 70% of history and reports how the
 winning settings did on the remaining 30% it never saw. Only the `test_` columns count.
+
+`walkforward` repeats that over rolling windows: re-tune on the previous 730 days, score the next 180,
+step forward 180 days. `beat_hold` counts the windows where the strategy beat buying and holding.
 
 ## Assumptions
 - Spot only, long only, no leverage. Starting cash 250.

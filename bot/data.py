@@ -30,14 +30,11 @@ def download(
     since_ms = ex.parse8601(f"{since}T00:00:00Z")
     step_ms = ex.parse_timeframe(timeframe) * 1000
     rows: list[list] = []
-    while True:
+    while since_ms <= ex.milliseconds():
         batch = ex.fetch_ohlcv(symbol, timeframe, since=since_ms, limit=300)
-        if not batch:
-            break
+        # an empty batch means no trading in that window (e.g. before the coin was listed): skip past it
+        since_ms = batch[-1][0] + step_ms if batch else since_ms + 300 * step_ms
         rows.extend(batch)
-        since_ms = batch[-1][0] + step_ms
-        if since_ms > ex.milliseconds():
-            break
         time.sleep(ex.rateLimit / 1000)
 
     df = drop_unfinished(pd.DataFrame(rows, columns=COLUMNS).drop_duplicates("timestamp"), step_ms, ex.milliseconds())
