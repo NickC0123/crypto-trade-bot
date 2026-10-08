@@ -132,3 +132,21 @@ def train_test(df: pd.DataFrame, strategy, grid: dict, split: float = 0.7, **kwa
     test = run(df.iloc[cut:], full_signal.iloc[cut:], **kwargs)
     test.params = best.params
     return best, test
+
+
+def walk_forward(df: pd.DataFrame, strategy, grid: dict, train: int = 730, test: int = 180, **kwargs) -> pd.DataFrame:
+    """Re-tune on each rolling `train`-bar window and score on the `test` bars right after it.
+
+    Gives many out-of-sample periods instead of one, so a result can't hinge on a single
+    lucky stretch. Each test window starts flat; the position isn't carried between windows.
+    """
+    rows = []
+    for start in range(0, len(df) - train - test + 1, test):
+        cut = start + train
+        best = sweep(df.iloc[start:cut], strategy, grid, **kwargs)[0]
+        signal = strategy(df.iloc[: cut + test], **best.params).iloc[cut:]
+        res = run(df.iloc[cut : cut + test], signal, **kwargs)
+        rows.append({"start": df.index[cut], "end": df.index[cut + test - 1], "params": best.params,
+                     "return": res.total_return, "max_dd": res.max_drawdown, "trades": res.trades,
+                     "fees": res.fees_paid})
+    return pd.DataFrame(rows)

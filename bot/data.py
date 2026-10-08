@@ -25,26 +25,29 @@ def download(
     """Fetch all candles since `since` via ccxt and write them to data/. Public data, no API key needed."""
     import ccxt  # imported lazily so backtests on cached data don't need it
 
-    ex = getattr(ccxt, exchange)({"enableRateLimit": True})
+    # requests_trust_env makes ccxt honour HTTPS_PROXY and REQUESTS_CA_BUNDLE like other tools do
+    ex = getattr(ccxt, exchange)({"enableRateLimit": True, "requests_trust_env": True})
     since_ms = ex.parse8601(f"{since}T00:00:00Z")
     step_ms = ex.parse_timeframe(timeframe) * 1000
     rows: list[list] = []
-    while True:
+    while since_ms <= ex.milliseconds():
         batch = ex.fetch_ohlcv(symbol, timeframe, since=since_ms, limit=300)
-        if not batch:
-            break
+        # an empty batch means no trading in that window (e.g. before the coin was listed): skip past it
+        since_ms = batch[-1][0] + step_ms if batch else since_ms + 300 * step_ms
         rows.extend(batch)
-        since_ms = batch[-1][0] + step_ms
-        if since_ms > ex.milliseconds():
-            break
         time.sleep(ex.rateLimit / 1000)
 
-    df = pd.DataFrame(rows, columns=COLUMNS).drop_duplicates("timestamp")
+    df = drop_unfinished(pd.DataFrame(rows, columns=COLUMNS).drop_duplicates("timestamp"), step_ms, ex.milliseconds())
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
     path = csv_path(exchange, symbol, timeframe)
     path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(path, index=False)
     return path
+
+
+def drop_unfinished(df: pd.DataFrame, step_ms: int, now_ms: int) -> pd.DataFrame:
+    """Drop candles that haven't closed yet; the exchange returns today's bar while it is still moving."""
+    return df[df["timestamp"] + step_ms <= now_ms]
 
 
 def load(path: str | Path) -> pd.DataFrame:
